@@ -4,23 +4,186 @@ format: html
 editor: visual
 ---
 
-## Quarto
+## Banco de dados
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+O conjunto de dados utilizado para a análise das stock prices da NVIDIA contém registros diários que representam o desempenho financeiro da empresa no mercado de ações.
 
-## Running Code
+O banco de dados foi extraído de: https://finance.yahoo.com/quote/NVDA/history/.
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+As variáveis incluídas são:
+
+- Date: Representa a data de cada registro.
+
+- Close.Last: Indica o preço de fechamento das ações da NVIDIA ao final de cada dia de negociação. 
+
+- Volume: Refere-se ao número total de ações negociadas em um determinado dia. 
+
+- Open: Representa o preço de abertura das ações no início de cada dia de negociação.
+
+- High: Mostra o preço mais alto atingido pelas ações durante o dia.
+
+- Low: Indica o preço mais baixo que as ações atingiram durante o dia. 
+
+Com isso, será feito um estudo para identificar as tendências, padrões sazonais, e a previsão dos preços das ações da NVIDIA. 
 
 ```{r}
-1 + 1
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(quantmod)
+
+df = read.csv("./data/historical_data.csv")
+
+df <- df %>%
+  mutate(
+    Close.Last = as.numeric(gsub("\\$", "", Close.Last)),
+    Open = as.numeric(gsub("\\$", "", Open)),
+    High = as.numeric(gsub("\\$", "", High)),
+    Low = as.numeric(gsub("\\$", "", Low))
+)
+
+df <- df %>%
+  mutate(Date = as.Date(Date, format = "%m/%d/%Y"))
+
+head(df)
+summary(df)
 ```
 
-You can add options to executable code like this
+Vemos que o minimo da ação já esteve abaixo de zero e o máximo acima de 100, o que é interessante, pois apresenta uma variação alta nos anos.
+
+## Análise exploratória de dados
+
+#### Análise dos preços
 
 ```{r}
-#| echo: false
-2 * 2
+library(plotly)
+
+fig <- plot_ly(df, x = ~Date) %>%
+  add_lines(y = ~Open, name = 'Abertura', visible = TRUE, line = list(color = 'orange')) %>%
+  add_lines(y = ~High, name = 'Alta', visible = TRUE, line = list(color = 'green')) %>%
+  add_lines(y = ~Low, name = 'Baixa', visible = TRUE, line = list(color = 'red')) %>%
+  add_lines(y = ~Close.Last, name = 'Fechamento', visible = TRUE, line = list(color = 'blue')) %>%
+  layout(
+    title = "Stock prices da NVIDIA",
+    xaxis = list(title = "Data"),
+    yaxis = list(title = "Preço"),
+    updatemenus = list(
+      list(
+        y = -0.2, 
+        x = 0.5,  
+        xanchor = 'center',
+        yanchor = 'top',
+        direction = 'up',
+        buttons = list(
+          list(method = "restyle", args = list("visible", list(TRUE, TRUE, TRUE, TRUE)),
+               label = "Todas"),
+          list(method = "restyle", args = list("visible", list(TRUE, FALSE, FALSE, FALSE)),
+               label = "Abertura"),
+          list(method = "restyle", args = list("visible", list(FALSE, TRUE, FALSE, FALSE)),
+               label = "Alta"),
+          list(method = "restyle", args = list("visible", list(FALSE, FALSE, TRUE, FALSE)),
+               label = "Baixa"),
+          list(method = "restyle", args = list("visible", list(FALSE, FALSE, FALSE, TRUE)),
+               label = "Fechamento")
+        )
+      )
+    ),
+    margin = list(l = 50, r = 50, b = 100, t = 50, pad = 4)
+  )
+
+fig
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+
+#### Volume de negociação ao longo do tempo
+
+```{r}
+ggplot(df, aes(x = Date, y = Volume)) +
+  geom_line(color = "skyblue") +
+  labs(title = "Volume de Negociação da NVIDIA",
+       x = "Data", y = "Volume") +
+  theme_bw()
+```
+
+#### Histograma dos preços
+
+```{r}
+(
+ggplot(df, aes(x = Low)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Baixa do dia",
+       x = "Baixa", y = "Frequência") +
+  theme_bw() 
+|
+ggplot(df, aes(x = Open)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Abertura do dia",
+       x = "Abertura", y = "Frequência") +
+  theme_bw() 
+) /
+(
+ggplot(df, aes(x = High)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Alta do dia",
+       x = "Alta", y = "Frequência") +
+  theme_bw() 
+|
+ggplot(df, aes(x = Close.Last)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Fechamento do dia",
+       x = "Fechamento", y = "Frequência") +
+  theme_bw() 
+)
+```
+
+Para as quatro variáveis de preço, as distruições são assimétricas positivas. É observado alguns outliers, explicados pela alta que houve nos anos anteriores.
+
+#### Gráficos de diferenças
+
+```{r}
+df = df %>% 
+  mutate(diff = (Close.Last - Open))
+
+(
+df %>%
+  ggplot(aes(y = diff, x = Date)) +
+  geom_line() +
+  labs(title = "Gráfico de diferença entre o fechamento e abertura",
+       x = "Data",
+       y = "Diferença no Fechamento") +
+  annotate("text", x = max(df$Date), y = mean(df$diff), 
+           label = paste("Média:", round(mean(df$diff), 3)), 
+           hjust = 7, vjust = -12, color = "black") +
+  theme_bw()
+)
+```
+
+
+#### Gráfico de decomposição para o fechamento
+
+#### Heatmap com as médias por ano, agrupado por mês
+
+```{r}
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+
+df_heatmap <- df %>%
+  mutate(Year = format(Date, "%Y"),
+         Month = month(as.POSIXlt(Date, format="%d/%m/%Y")))
+
+data_summary <- df_heatmap %>%
+  group_by(Year,Month) %>%
+  summarise(Average_Close = mean(Close.Last, na.rm = TRUE), .groups = "drop") %>%
+  ungroup()
+
+ggplot(data_summary, aes(x = Year, y = Month, fill = Average_Close)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "yellow", high = "red") +
+  labs(title = "Heatmap de Sazonalidade",
+       x = "Ano",
+       y = "Mês",
+       fill = "Preço Médio") +
+  theme_bw()
+```
+
