@@ -136,7 +136,7 @@ ggplot(df, aes(x = Close.Last)) +
 )
 ```
 
-Para as quatro variáveis de preço, as distruições são assimétricas positivas. É observado alguns outliers, explicados pela alta que houve nos anos anteriores.
+Para as quatro variáveis de preço, as distruições são assimétricas positivas. É observado alguns outliers, explicados pela alta que houve nos anos últimos anos.
 
 #### Gráficos de diferenças
 
@@ -158,8 +158,22 @@ df %>%
 )
 ```
 
+É verificado uma alta volatilidade nos últimos anos da série. Isso é interpretado, pois há datas com diferenças maiores de 5, tanto para o negativo quanto para o positivo. Por fim, é verificado a média das diferenças, ela se aproxima de zero, o que é o esperado, pois se tivessemos uma média de diferenças positivas, faria sentido comprar na abertura e vender no fechamento, e se a média fosse negativa, não faria sentido comprar na abertura e vender no fechamento, pois o valor do fechamento seria em média menor do que o valor da abertura.
 
-#### Gráfico de decomposição para o fechamento
+#### Gráfico de Decomposição da série temporal
+
+```{r}
+df_sorted <- df[order(df$Date, decreasing = FALSE), ]
+
+start_year <- as.numeric(format(min(df$Date), "%Y"))
+start_doy <- as.numeric(format(min(df$Date), "%j")) 
+frequency <- 252
+
+ts_open <- ts(df_sorted$Open, start = c(start_year, start_doy), frequency = frequency)
+ts_open %>% 
+  decompose() %>%
+  plot()
+```
 
 #### Heatmap com as médias por ano, agrupado por mês
 
@@ -174,16 +188,17 @@ df_heatmap <- df %>%
 
 data_summary <- df_heatmap %>%
   group_by(Year,Month) %>%
-  summarise(Average_Close = mean(Close.Last, na.rm = TRUE), .groups = "drop") %>%
+  summarise(Average_Close = mean(Open, na.rm = TRUE), .groups = "drop") %>%
   ungroup()
 
 ggplot(data_summary, aes(x = Year, y = Month, fill = Average_Close)) +
   geom_tile(color = "white") +
   scale_fill_gradient(low = "yellow", high = "red") +
-  labs(title = "Heatmap de Sazonalidade",
+  labs(title = "Heatmap das médias agrupadas por mês e ano",
        x = "Ano",
        y = "Mês",
-       fill = "Preço Médio") +
+       fill = "Preço Médio de abertura") +
   theme_bw()
 ```
 
+Aqui temos outra maneira de interpretar o gráfico (Preço x Data) da série temporal. Esse gráfico mostra uma maneira agrupada em mês e ano, foi calculado a média dos meses para cada ano e plotado no gráfico, vemos claramente que no último ano (2024), tivemos um aumento muito alto da média, enquanto que entre o mês 6 de 2021 até o mês 11 de 2023, vemos um aumento gradual da média do preço de abertura.
