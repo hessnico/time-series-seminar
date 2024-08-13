@@ -4,6 +4,18 @@ format: html
 editor: visual
 ---
 
+```{r, include=F}
+libraries <- c("dplyr", "ggplot2", "patchwork", "quantmod", "plotly", "lubridate", "reshape2", "tensorflow", "keras")
+
+load_libraries <- function(lib_list) {
+  invisible(lapply(lib_list, function(x) suppressWarnings(require(x, character.only = TRUE))))
+}
+
+load_libraries(libraries)
+
+```
+
+
 ## Banco de dados
 
 O conjunto de dados utilizado para a análise das stock prices da NVIDIA contém registros diários que representam o desempenho financeiro da empresa no mercado de ações.
@@ -27,11 +39,6 @@ As variáveis incluídas são:
 Com isso, será feito um estudo para identificar as tendências, padrões sazonais, e a previsão dos preços das ações da NVIDIA. 
 
 ```{r}
-library(dplyr)
-library(ggplot2)
-library(patchwork)
-library(quantmod)
-
 df = read.csv("./data/historical_data.csv")
 
 df <- df %>%
@@ -56,8 +63,6 @@ Vemos que o minimo da ação já esteve abaixo de zero e o máximo acima de 100,
 #### Análise dos preços
 
 ```{r}
-library(plotly)
-
 fig <- plot_ly(df, x = ~Date) %>%
   add_lines(y = ~Open, name = 'Abertura', visible = TRUE, line = list(color = 'orange')) %>%
   add_lines(y = ~High, name = 'Alta', visible = TRUE, line = list(color = 'green')) %>%
@@ -95,15 +100,24 @@ fig
 ```
 
 
-#### Volume de negociação ao longo do tempo
+#### Volume de negociação 
 
 ```{r}
-ggplot(df, aes(x = Date, y = Volume)) +
-  geom_line(color = "skyblue") +
-  labs(title = "Volume de Negociação da NVIDIA",
-       x = "Data", y = "Volume") +
-  theme_bw()
+p1 <- plot_ly(df, x = ~Date, y = ~Close.Last, type = 'scatter', mode = 'lines', name = 'Close.Last',
+              line = list(color = 'blue')) %>%
+  layout(yaxis = list(title = "Close.Last"))
+
+p2 <- plot_ly(df, x = ~Date, y = ~Volume, type = 'bar', name = 'Volume',
+              marker = list(color = 'orange')) %>%
+  layout(yaxis = list(title = "Volume"))
+
+combined_plot <- subplot(p1, p2, nrows = 2, shareX = TRUE, titleX = TRUE, titleY = TRUE)
+
+combined_plot
 ```
+
+
+Vemos que a ação começa a ter um volume alto de transções quando ela começa a ter um valor maior, como visto entre os anos de 2016 e 2018.
 
 #### Histograma dos preços
 
@@ -175,13 +189,11 @@ ts_open %>%
   plot()
 ```
 
+Vemos uma sazonalidade. Além disso vemos que a tendência (`trend`) é crescente. Também vemos que nos últimos anos houve uma maior variabilidade da série, concluímos isso a partir do gráfico `random`.
+
 #### Heatmap com as médias por ano, agrupado por mês
 
 ```{r}
-library(ggplot2)
-library(lubridate)
-library(dplyr)
-
 df_heatmap <- df %>%
   mutate(Year = format(Date, "%Y"),
          Month = month(as.POSIXlt(Date, format="%d/%m/%Y")))
@@ -202,3 +214,51 @@ ggplot(data_summary, aes(x = Year, y = Month, fill = Average_Close)) +
 ```
 
 Aqui temos outra maneira de interpretar o gráfico (Preço x Data) da série temporal. Esse gráfico mostra uma maneira agrupada em mês e ano, foi calculado a média dos meses para cada ano e plotado no gráfico, vemos claramente que no último ano (2024), tivemos um aumento muito alto da média, enquanto que entre o mês 6 de 2021 até o mês 11 de 2023, vemos um aumento gradual da média do preço de abertura.
+
+#### Verificando a correlação da série
+
+```{r}
+df %>% 
+  select(-c(Date, diff)) %>%
+    cor() %>%
+      melt() %>% 
+      ggplot(aes(x=Var1, y=Var2, fill=value)) + 
+        geom_tile() +
+        scale_fill_gradient2(low = "purple", high = "skyblue", mid = "white", 
+          midpoint = 0, limit = c(-1,1), space = "Lab", 
+          name="Pearson\nCorrelation") +
+        theme_bw() + 
+        theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+          size = 12, hjust = 1)) +
+        coord_fixed()
+```
+
+Vemos uma forte correlação das variáveis de preço (o que é esperado). E uma correlação zero do Volume com as variáveis de preço.
+
+```{r}
+df_wo_diff <- df %>% select(-c(diff))
+test = df_wo_diff %>% filter(Date >= "2024-01-01")
+train = df_wo_diff %>% filter(Date < "2024-01-01")
+
+cat(
+    paste("Test dataset size: ", test %>% dim() %>% first),
+    paste("Train dataset size: ", train %>% dim()%>% first),
+    paste("Porcentagem do banco: ", 
+          (test %>% dim() %>% first/(test %>% dim() %>% first + train %>% dim()%>% first )) %>% 
+            round(digits = 4),
+          "%"
+          ),
+    sep = "\n"
+)
+
+write.csv(train, file = "./data/train.csv", row.names = FALSE)
+write.csv(test, file = "./data/test.csv", row.names = FALSE)
+```
+
+```{r}
+
+```
+
+
+
+
