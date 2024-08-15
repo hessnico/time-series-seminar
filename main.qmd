@@ -260,7 +260,27 @@ df %>%
 ```
 
 ```{r}
+## qq plot não faz sentido para LSTM
 
+lstm_pred = read.csv("./data/lstm_predictions.csv")
+lstm_pred
+
+residuals <- as.numeric(
+  tail(df_sorted$Close.Last, dim(lstm_pred)[1]) - lstm_pred$lstm_predictions
+)
+
+residual_data <- data.frame(
+  Date = tail(df_sorted$Date, dim(lstm_pred)[1]),
+  Residuals = residuals
+)
+
+ggplot(residual_data, aes(x = Date, y = Residuals)) +
+  geom_line(color = "purple", size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  labs(title = "Resíduos das predições",
+       y = "Resíduos",
+       x = "Data") +
+  theme_bw()
 ```
 
 
